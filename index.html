@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<button onclick="startRecord"></button>
+
+</body>
+<script>
+    function startRecord() {
+        navigator.mediaDevices.getUserMedia({audio: true, video: true})
+                .then(function(stream){
+                  alert("开始录音")
+                }.bind(this)).
+        catch(function(err){
+            console.log(err)
+            mui.toast(err)
+            this.showprocess = false
+        })
+    }
+
+</script>
+</html>

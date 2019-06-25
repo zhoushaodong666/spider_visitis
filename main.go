@@ -9,35 +9,41 @@ import (
 	"net/url"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 )
 
 //增加的访问量
 var num int = 0
 
-//使用channel控制并发的协程数量
-var ch = make(chan int, 10)
-
 func main() {
+
+	var waitgroup sync.WaitGroup
 
 	//需要刷访问量的文章列表
 	article_list := []string{
-		"http://baidu.com",
-		"http://weibo.com",
-		"http://baidu.com",
+		"https://blog.csdn.net/weixin_36162966/article/details/90634035",
+		"https://blog.csdn.net/weixin_36162966/article/details/86649197",
+		"https://blog.csdn.net/weixin_36162966/article/details/86645765",
+		"https://blog.csdn.net/weixin_36162966/article/details/86648219",
+		"https://blog.csdn.net/weixin_36162966/article/details/90605065",
+		"https://blog.csdn.net/weixin_36162966/article/details/90752923",
+		"https://blog.csdn.net/weixin_36162966/article/details/91432201",
+		"https://blog.csdn.net/weixin_36162966/article/details/91383006",
+		"https://blog.csdn.net/weixin_36162966/article/details/88866796",
+		"https://blog.csdn.net/weixin_36162966/article/details/91463689",
 	}
 
 	//快代理的页数
 	//开始页数
-	startPage := 301
+	startPage := 251
 	//截止页数
-	endPage := 400
+	endPage := 300
 
 	for i := startPage; i <= endPage; i++ {
 		time.Sleep(2 * time.Second)
 		fmt.Println("开始执行第" + strconv.Itoa(i) + "页")
-		//写入channel
-		ch <- 1
+		waitgroup.Add(1)
 		allProxy := GetProxy(i)
 		go func(i int) {
 
@@ -46,25 +52,33 @@ func main() {
 					fmt.Print(oneProxy, "----")
 					rand.Seed(time.Now().UnixNano())
 					client := NewHttpClient(oneProxy)
-					HttpGET(client, article_list[rand.Intn(len(article_list))])
+					ranNum := rand.Intn(len(article_list))
+
+					err := HttpGET(client, article_list[ranNum])
+					if err == nil {
+						alist := append(article_list[:ranNum], article_list[ranNum+1:]...)
+						for _, v := range alist {
+							HttpGET(client, v)
+						}
+					}
 				}
 
 				fmt.Println("第" + strconv.Itoa(i) + "页执行完毕")
 
 			}
-			//从channel中读
-			<-ch
+
+			waitgroup.Done()
 		}(i)
 	}
 
-
+	waitgroup.Wait()
 
 }
 
 /**
 抓取快代理的IP https://www.kuaidaili.com/free
 抓取一页代理的IP 因为快代理有反爬机智 太快就返回503状态码  没有ip的数据
- */
+*/
 func GetProxy(pageIndex int) []string {
 	allProxy := []string{}
 	url := "https://www.kuaidaili.com/free/inha/" + strconv.Itoa(pageIndex)
@@ -128,23 +142,23 @@ func NewHttpClient(proxyAddr string) *http.Client {
 }
 
 //发起http请求
-func HttpGET(client *http.Client, url string) {
+func HttpGET(client *http.Client, url string) error {
 	fmt.Println(url)
 	rsp, err := client.Get(url)
 	if err != nil {
 		fmt.Println()
-		return
+		return err
 	}
 	defer rsp.Body.Close()
 
 	if rsp.StatusCode != http.StatusOK || err != nil {
 		fmt.Errorf("HTTP GET Code=%v, URI=%v, err=%v", rsp.StatusCode, url, err)
-		return
+		return err
 	}
 
 	num += 1
 	fmt.Printf("访问 %s --- 状态码[%s] 访问量:%d \n", url, rsp.StatusCode, num)
-
+	return nil
 }
 
 //伪造一个User-Agent更不容易给反爬机制发现
